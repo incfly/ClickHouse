@@ -374,7 +374,6 @@ void MergeTreePartition::serializeText(const MergeTreeData & storage, WriteBuffe
     // In some cases we create empty parts and then value is empty.
     if (value.empty())
     {
-        writeCString("tuple()", out);
         return;
     }
     if (key_size == 0)
