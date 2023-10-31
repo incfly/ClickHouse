@@ -2913,6 +2913,8 @@ zkutil::ZooKeeperPtr Context::getZooKeeper() const
     else if (shared->zookeeper->hasReachedDeadline())
         shared->zookeeper->finalize("ZooKeeper session has reached its deadline");
 
+    /// NOTE: where this is reconnecting. shared->zookeeper->startNewSession() creating new `ZooKeeper` object. New process.
+    /// So nothing to worry about.
     if (shared->zookeeper->expired())
     {
         Stopwatch watch;

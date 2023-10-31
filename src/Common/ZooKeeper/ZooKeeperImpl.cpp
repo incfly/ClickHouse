@@ -393,6 +393,8 @@ void ZooKeeper::connect(
     bool connected = false;
 
     WriteBufferFromOwnString fail_reasons;
+
+    /// NOTE: seems like keeper client just try from beginning and return if first one succeeds?
     for (size_t try_no = 0; try_no < num_tries; ++try_no)
     {
         for (size_t i = 0; i < nodes.size(); ++i)
@@ -447,8 +449,10 @@ void ZooKeeper::connect(
                 connected = true;
                 original_index = static_cast<Int8>(node.original_index);
 
+                // i != 0 means suboptimal.
                 if (i != 0)
                 {
+                    // argument where the max age of the connection could be.
                     std::uniform_int_distribution<UInt32> fallback_session_lifetime_distribution
                     {
                         args.fallback_session_lifetime.min_sec,
