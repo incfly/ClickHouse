@@ -345,11 +345,15 @@ ZooKeeper::ZooKeeper(
     if (args.enable_fault_injections_during_startup)
         setupFaultDistributions();
 
-    connect(nodes, args.connection_timeout_ms * 1000);
+    
+    // for (size_t i = 0; i < nodes.size(); ++i)
+    // {
+        
+    int i =0;
+    connectHost(nodes[i], args.connection_timeout_ms * 1000);
+    LOG_INFO(log, "Jianfei Debug, connectHost, connected with index {}, length {}", i, nodes.size());
 
-    if (!args.auth_scheme.empty())
-        sendAuth(args.auth_scheme, args.identity);
-
+    // Copy pasted.
     try
     {
         /// NOTE: maybe send_thread is started somewhere, maybe not, do not matter.
@@ -382,9 +386,175 @@ ZooKeeper::ZooKeeper(
 
         throw;
     }
+    // Now send get request.
+    auto promise = std::make_shared<std::promise<Coordination::GetResponse>>();
+    auto future = promise->get_future();
+
+    // NOTE: more todo: we probably need a sync version for availability zone zk response.
+    auto callback = [promise, logger = this->log ](const Coordination::GetResponse & response) mutable
+    {
+        LOG_DEBUG(logger, "Jianfei init az, az value {}", response.data);
+    };
+    get("/keeper/availability_zone", std::move(callback), {});
+
+    if (future.wait_for(std::chrono::milliseconds(args.operation_timeout_ms)) != std::future_status::ready)
+        throw Exception(Error::ZOPERATIONTIMEOUT, "Jianfei init az, Failed to get availability zone: timeout");
+
+    auto response = future.get();
+
+    /// Finalize does not seem wait for exsting request to finish.
+
+    /// Why this cause segfault? because finalize does not mean join. still joable.
+    /// And can assertions on the ~ThreadFromGlobalPool does not allow you to destruct when it's not joined yet
+    /// (logic part, unrelated to ptr etc)
+    LOG_INFO(log, "Jianfei before calling finalize");
+    // Poco::Thread::sleep(3000);
+
+    // finalize(true, true, "Initialize Getting Availability Zone");
+    // send_thread.join();
+    // receive_thread.join();
+    LOG_INFO(log, "Jianfei connectHost both done.");
+    // }
+    LOG_INFO(log, "Jianfei debug, finish all sending, normal initialization now");
+    
+
+    // connect(nodes, args.connection_timeout_ms * 1000);
+
+    // if (!args.auth_scheme.empty())
+    //     sendAuth(args.auth_scheme, args.identity);
+
+    // try
+    // {
+    //     /// NOTE: maybe send_thread is started somewhere, maybe not, do not matter.
+    //     /// important thing is that separate thread and async, and we need to join in finalize, already done.
+    //     LOG_INFO(log, "Jianfei normal init started");
+    //     send_thread = ThreadFromGlobalPool([this] { sendThread(); });
+    //     receive_thread = ThreadFromGlobalPool([this] { receiveThread(); });
+
+    //     /// NOTE: send is after connect.
+    //     /// Still fails somehow.
+    //     initFeatureFlags();
+    //     keeper_feature_flags.logFlags(log);
+    //     LOG_INFO(log, "Jianfei normal init finish feature flags.");
+
+    //     ProfileEvents::increment(ProfileEvents::ZooKeeperInit);
+    // }
+    // catch (...)
+    // {
+    //     tryLogCurrentException(log, "Failed to connect to ZooKeeper");
+
+    //     try
+    //     {
+    //         requests_queue.finish();
+    //         socket.shutdown();
+    //     }
+    //     catch (...)
+    //     {
+    //         tryLogCurrentException(log);
+    //     }
+
+    //     send_thread.join();
+    //     receive_thread.join();
+
+    //     throw;
+    // }
 }
 
 
+void ZooKeeper::connectHost(
+    const Node & node,
+    Poco::Timespan connection_timeout)
+{
+    static constexpr size_t num_tries = 3;
+    bool connected = false;
+
+    WriteBufferFromOwnString fail_reasons;
+
+    for (size_t try_no = 0; try_no < num_tries; ++try_no)
+    {
+        try
+        {
+            /// Reset the state of previous attempt.
+            if (node.secure)
+            {
+#if USE_SSL
+                socket = Poco::Net::SecureStreamSocket();
+#else
+                throw Poco::Exception(
+                    "Communication with ZooKeeper over SSL is disabled because poco library was built without NetSSL support.");
+#endif
+            }
+            else
+            {
+                socket = Poco::Net::StreamSocket();
+            }
+
+            socket.connect(node.address, connection_timeout);
+            socket_address = socket.peerAddress();
+
+            socket.setReceiveTimeout(args.operation_timeout_ms * 1000);
+            socket.setSendTimeout(args.operation_timeout_ms * 1000);
+            socket.setNoDelay(true);
+
+            // NOTE: socket emplace for the keeper read and write.
+            in.emplace(socket);
+            out.emplace(socket);
+
+            try
+            {
+                sendHandshake();
+            }
+            catch (DB::Exception & e)
+            {
+                e.addMessage("while sending handshake to ZooKeeper");
+                throw;
+            }
+
+            try
+            {
+                receiveHandshake();
+            }
+            catch (DB::Exception & e)
+            {
+                e.addMessage("while receiving handshake from ZooKeeper");
+                throw;
+            }
+            connected = true;
+            original_index = static_cast<Int8>(node.original_index);
+
+            LOG_DEBUG(log, "Jianfei debug, connection address{}", node.address.toString());
+            /// NOTE: TODO, understand promise and future.
+            auto promise = std::make_shared<std::promise<Coordination::GetResponse>>();
+            auto future = promise->get_future();
+
+            // NOTE: more todo: we probably need a sync version for availability zone zk response.
+            auto callback = [promise, logger = this->log ](const Coordination::GetResponse & response) mutable
+            {
+                LOG_DEBUG(logger, "Jianfei debug, checking availability value {}", response.data);
+            };
+        }
+        catch (...)
+        {
+            fail_reasons << "\n" << getCurrentExceptionMessage(false) << ", " << node.address.toString();
+        }
+    }
+
+    if (!connected)
+    {
+        WriteBufferFromOwnString message;
+        message << node.address.toString();
+        message << fail_reasons.str() << "\n";
+        throw Exception(Error::ZCONNECTIONLOSS, "All connection tries failed while connecting to ZooKeeper. nodes: {}", message.str());
+    }
+    else
+    {
+        LOG_INFO(log, "Connected to ZooKeeper at {} with session_id {}{}", socket.peerAddress().toString(), session_id, fail_reasons.str());
+    }
+}
+
+/// NOTE: change my mind, just implement a function: connectHostImpl().
+/// When using availbility zone local option, call connectHostImpl first.
+/// Clearer, less overkill.
 void ZooKeeper::connect(
     const Nodes & nodes,
     Poco::Timespan connection_timeout)
@@ -397,11 +567,11 @@ void ZooKeeper::connect(
 
     WriteBufferFromOwnString fail_reasons;
 
-    /// NOTE: seems like keeper client just try from beginning and return if first one succeeds?
     for (size_t try_no = 0; try_no < num_tries; ++try_no)
     {
         for (size_t i = 0; i < nodes.size(); ++i)
         {
+            LOG_DEBUG(log, "Jianfei debug,  normal connection, trying index {}, number {}", i, try_no);
             const auto & node = nodes[i];
             try
             {
@@ -475,7 +645,7 @@ void ZooKeeper::connect(
                 }
 
                 // break;
-                LOG_DEBUG(log, "Jianfei debug, connection index {}, address{}", i, node.address.toString());
+                LOG_DEBUG(log, "Jianfei debug, normal connection, connection index {}, address{}", i, node.address.toString());
                 /// NOTE: TODO, understand promise and future.
                 auto promise = std::make_shared<std::promise<Coordination::GetResponse>>();
                 auto future = promise->get_future();
@@ -483,10 +653,15 @@ void ZooKeeper::connect(
                 // NOTE: more todo: we probably need a sync version for availability zone zk response.
                 auto callback = [promise, logger = this->log ](const Coordination::GetResponse & response) mutable
                 {
-                    LOG_DEBUG(logger, "Jianfei debug, checking availability value {}", response.data);
+                    LOG_DEBUG(logger, "Jianfei debug,  normal connection, checking availability value {}", response.data);
                 };
-
                 get("/keeper/availability_zone", std::move(callback), {});
+
+                // Not working because send/receiveThread is not initialized yet.
+                // future.wait();
+                // auto response = future.get();
+                // LOG_DEBUG(logger, "Jianfei debug, checking availability value {}", response.data);
+
             }
             catch (...)
             {
@@ -967,6 +1142,8 @@ void ZooKeeper::finalize(bool error_send, bool error_receive, const String & rea
             }
 
             /// Send thread will exit after sending close request or on expired flag
+            // LOG_INFO(log, "Jianfei finalize before join");
+            // Poco::Thread::sleep(3000);
             send_thread.join();
         }
 
@@ -985,7 +1162,11 @@ void ZooKeeper::finalize(bool error_send, bool error_receive, const String & rea
         }
 
         if (!error_receive)
+        {
+            // LOG_INFO(log, "Jianfei finalize before receive join");
+            // Poco::Thread::sleep(3000);
             receive_thread.join();
+        }
 
         {
             std::lock_guard lock(operations_mutex);

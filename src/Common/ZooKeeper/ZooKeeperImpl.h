@@ -308,6 +308,10 @@ private:
         const Nodes & node,
         Poco::Timespan connection_timeout);
 
+    void connectHost(
+        const Node & node,
+        Poco::Timespan connection_timeout);
+
     void sendHandshake();
     void receiveHandshake();
 
