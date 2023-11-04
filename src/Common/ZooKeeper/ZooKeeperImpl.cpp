@@ -362,6 +362,7 @@ ZooKeeper::ZooKeeper(
         receive_thread = ThreadFromGlobalPool([this] { receiveThread(); });
 
         /// NOTE: send is after connect.
+        /// This is at exception, so catch would do the finish and join. okay.
         initFeatureFlags();
         keeper_feature_flags.logFlags(log);
 
@@ -393,7 +394,9 @@ ZooKeeper::ZooKeeper(
     // NOTE: more todo: we probably need a sync version for availability zone zk response.
     auto callback = [promise, logger = this->log ](const Coordination::GetResponse & response) mutable
     {
-        LOG_DEBUG(logger, "Jianfei init az, az value {}", response.data);
+        LOG_DEBUG(logger, "Jianfei init az, az value, inside {}", response.data);
+        // This fails, and no catch, no join. call destructor in the inner structure first.
+        promise->set_value(response);
     };
     get("/keeper/availability_zone", std::move(callback), {});
 
@@ -414,7 +417,8 @@ ZooKeeper::ZooKeeper(
     // send_thread.join();
     // receive_thread.join();
     LOG_INFO(log, "Jianfei connectHost both done.");
-    // }
+
+    // Exciting! try again! finailize and then reconnect.
     LOG_INFO(log, "Jianfei debug, finish all sending, normal initialization now");
     
 
