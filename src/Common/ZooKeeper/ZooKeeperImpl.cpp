@@ -346,12 +346,8 @@ ZooKeeper::ZooKeeper(
         setupFaultDistributions();
 
     
-    // for (size_t i = 0; i < nodes.size(); ++i)
-    // {
-        
     int i =0;
     connectHost(nodes[i], args.connection_timeout_ms * 1000);
-    LOG_INFO(log, "Jianfei Debug, connectHost, connected with index {}, length {}", i, nodes.size());
 
     // Copy pasted.
     try
@@ -366,7 +362,51 @@ ZooKeeper::ZooKeeper(
         initFeatureFlags();
         keeper_feature_flags.logFlags(log);
 
+        // Now send get request.
+        auto promise = std::make_shared<std::promise<Coordination::GetResponse>>();
+        auto future = promise->get_future();
+
+        auto callback = [promise, logger = this->log ](const Coordination::GetResponse & response) mutable
+        {
+            LOG_DEBUG(logger, "Jianfei init az, az value, inside {}", response.data);
+            // This fails, and no catch, no join. call destructor in the inner structure first.
+            promise->set_value(response);
+        };
+        get("/keeper/availability_zone", std::move(callback), {});
+        if (future.wait_for(std::chrono::milliseconds(args.operation_timeout_ms)) != std::future_status::ready)
+            throw Exception(Error::ZOPERATIONTIMEOUT, "Jianfei init az, Failed to get availability zone: timeout");
+
+        auto response = future.get();
+
+        LOG_INFO(log, "Jianfei debug, finish all sending, normal initialization now");
+
+        // if (response.data.length() < 100)
+        //     throw Exception(Error::ZOPERATIONTIMEOUT, "Jianfei debug, intended");
+        /// Finalize does not seem wait for exsting request to finish.
+        // /// Why this cause segfault? because finalize does not mean join. still joable.
+        // /// And can assertions on the ~ThreadFromGlobalPool does not allow you to destruct when it's not joined yet
+        // /// (logic part, unrelated to ptr etc)
+
+
+        /// Status, retry re-connect would fail (comment out this code to the bottom you get it working).
+        // Reasons are below.
+        // This does not work because finalize stop queue first and then join thread.
+        // Threads are only joined when the queue is finished, we need to change ZooKeeper::sendThread() { while (request_queue.isFinished()) condition{}}
+        // Does not sound like a good idea for too much low level micro changes.        
+        finalize(false, false, "Jianfei debug, finalize for second connect");
+
+        connectHost(nodes[i], args.connection_timeout_ms * 1000);
+        send_thread = ThreadFromGlobalPool([this] { sendThread(); });
+        receive_thread = ThreadFromGlobalPool([this] { receiveThread(); });
+
+        /// NOTE: send is after connect.
+        /// This is at exception, so catch would do the finish and join. okay.
+        initFeatureFlags();
+        keeper_feature_flags.logFlags(log);
+
+        LOG_INFO(log, "Jianfei normal init succeed!");
         ProfileEvents::increment(ProfileEvents::ZooKeeperInit);
+
     }
     catch (...)
     {
@@ -387,81 +427,8 @@ ZooKeeper::ZooKeeper(
 
         throw;
     }
-    // Now send get request.
-    auto promise = std::make_shared<std::promise<Coordination::GetResponse>>();
-    auto future = promise->get_future();
-
-    // NOTE: more todo: we probably need a sync version for availability zone zk response.
-    auto callback = [promise, logger = this->log ](const Coordination::GetResponse & response) mutable
-    {
-        LOG_DEBUG(logger, "Jianfei init az, az value, inside {}", response.data);
-        // This fails, and no catch, no join. call destructor in the inner structure first.
-        promise->set_value(response);
-    };
-    get("/keeper/availability_zone", std::move(callback), {});
-
-    if (future.wait_for(std::chrono::milliseconds(args.operation_timeout_ms)) != std::future_status::ready)
-        throw Exception(Error::ZOPERATIONTIMEOUT, "Jianfei init az, Failed to get availability zone: timeout");
-
-    auto response = future.get();
-
-    /// Finalize does not seem wait for exsting request to finish.
-
-    /// Why this cause segfault? because finalize does not mean join. still joable.
-    /// And can assertions on the ~ThreadFromGlobalPool does not allow you to destruct when it's not joined yet
-    /// (logic part, unrelated to ptr etc)
-    LOG_INFO(log, "Jianfei before calling finalize");
-    // Poco::Thread::sleep(3000);
-
-    // finalize(true, true, "Initialize Getting Availability Zone");
-    // send_thread.join();
-    // receive_thread.join();
-    LOG_INFO(log, "Jianfei connectHost both done.");
-
-    // Exciting! try again! finailize and then reconnect.
-    LOG_INFO(log, "Jianfei debug, finish all sending, normal initialization now");
     
-
     // connect(nodes, args.connection_timeout_ms * 1000);
-
-    // if (!args.auth_scheme.empty())
-    //     sendAuth(args.auth_scheme, args.identity);
-
-    // try
-    // {
-    //     /// NOTE: maybe send_thread is started somewhere, maybe not, do not matter.
-    //     /// important thing is that separate thread and async, and we need to join in finalize, already done.
-    //     LOG_INFO(log, "Jianfei normal init started");
-    //     send_thread = ThreadFromGlobalPool([this] { sendThread(); });
-    //     receive_thread = ThreadFromGlobalPool([this] { receiveThread(); });
-
-    //     /// NOTE: send is after connect.
-    //     /// Still fails somehow.
-    //     initFeatureFlags();
-    //     keeper_feature_flags.logFlags(log);
-    //     LOG_INFO(log, "Jianfei normal init finish feature flags.");
-
-    //     ProfileEvents::increment(ProfileEvents::ZooKeeperInit);
-    // }
-    // catch (...)
-    // {
-    //     tryLogCurrentException(log, "Failed to connect to ZooKeeper");
-
-    //     try
-    //     {
-    //         requests_queue.finish();
-    //         socket.shutdown();
-    //     }
-    //     catch (...)
-    //     {
-    //         tryLogCurrentException(log);
-    //     }
-
-    //     send_thread.join();
-    //     receive_thread.join();
-
-    //     throw;
-    // }
 }
 
 
@@ -1101,7 +1068,7 @@ void ZooKeeper::receiveEvent()
         request_info.callback(*response);
 }
 
-
+// Idea is to make the queue and thread all finalized.
 void ZooKeeper::finalize(bool error_send, bool error_receive, const String & reason)
 {
     /// If some thread (send/receive) already finalizing session don't try to do it
