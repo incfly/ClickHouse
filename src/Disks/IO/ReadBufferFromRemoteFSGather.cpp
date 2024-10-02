@@ -66,6 +66,8 @@ ReadBufferFromRemoteFSGather::ReadBufferFromRemoteFSGather(
         current_object = blobs_to_read.front();
 }
 
+
+// How CachedOnDiskReadBufferFromFile is used? just create it when need to read from it.
 SeekableReadBufferPtr ReadBufferFromRemoteFSGather::createImplementationBuffer(const StoredObject & object, size_t start_offset)
 {
     if (current_buf && !with_file_cache)
@@ -207,6 +209,8 @@ bool ReadBufferFromRemoteFSGather::moveToNextBuffer()
     return true;
 }
 
+
+// Let's see how the data is read into bytes buffer.
 bool ReadBufferFromRemoteFSGather::readImpl()
 {
     SwapHelper swap(*this, *current_buf);

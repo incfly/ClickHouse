@@ -217,6 +217,7 @@ public:
     virtual void listFiles(const String & path, std::vector<String> & file_names) const = 0;
 
     /// Open the file for read and return ReadBufferFromFileBase object.
+    /// Very general interface.
     virtual std::unique_ptr<ReadBufferFromFileBase> readFile( /// NOLINT
         const String & path,
         const ReadSettings & settings = ReadSettings{},

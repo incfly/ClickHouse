@@ -64,6 +64,7 @@ struct FileCacheReserveStat
 
 /// Local cache for remote filesystem files, represented as a set of non-overlapping non-empty file segments.
 /// Different caching algorithms are implemented using IFileCachePriority.
+/// Start to make sense. this is the ultimate file system cache management. Segment is checked upon this cache.
 class FileCache : private boost::noncopyable
 {
 public:

@@ -20,6 +20,7 @@ extern const Metric FilesystemCacheReadBuffers;
 namespace DB
 {
 
+// TODO: focus on the interface and API how is this used?
 class CachedOnDiskReadBufferFromFile : public ReadBufferFromFileBase
 {
 public:

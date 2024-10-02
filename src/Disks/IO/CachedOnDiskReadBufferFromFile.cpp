@@ -136,6 +136,8 @@ bool CachedOnDiskReadBufferFromFile::nextFileSegmentsBatch()
     else
     {
         CreateFileSegmentSettings create_settings(FileSegmentKind::Regular);
+        // This is how the CachedOnDiskReadBufferFromFile, a buffer interface, integrate with the underlying cache mgmt.
+        // CachedOnDiskReadBufferFromFile is also responsible for managing a single view of the file segment.
         file_segments = cache->getOrSet(
             cache_key, file_offset_of_buffer_end, size, file_size.value(),
             create_settings, settings.filesystem_cache_segments_batch_size, user);
@@ -173,6 +175,7 @@ CachedOnDiskReadBufferFromFile::getCacheReadBuffer(const FileSegment & file_segm
 {
     ProfileEventTimeIncrement<Microseconds> watch(ProfileEvents::CachedReadBufferCreateBufferMicroseconds);
 
+    // Local file system path.
     auto path = file_segment.getPath();
     if (cache_file_reader)
     {
@@ -198,6 +201,7 @@ CachedOnDiskReadBufferFromFile::getCacheReadBuffer(const FileSegment & file_segm
     return cache_file_reader;
 }
 
+/// This appears to be the case that file is not ready yet. need to see how the download actually happens.
 CachedOnDiskReadBufferFromFile::ImplementationBufferPtr
 CachedOnDiskReadBufferFromFile::getRemoteReadBuffer(FileSegment & file_segment, ReadType read_type_)
 {
@@ -329,9 +333,12 @@ CachedOnDiskReadBufferFromFile::getReadBufferForFileSegment(FileSegment & file_s
                     return getCacheReadBuffer(file_segment);
                 }
 
+                // Aha, we have wait here. now just need to check where FileSegment state is changed.
                 download_state = file_segment.wait(file_offset_of_buffer_end);
                 continue;
             }
+
+            // Wait for the FileSegment state is downloaded, and then read cached read buffer.
             case FileSegment::State::DOWNLOADED:
             {
                 read_type = ReadType::CACHED;
@@ -389,6 +396,8 @@ CachedOnDiskReadBufferFromFile::getReadBufferForFileSegment(FileSegment & file_s
                         chassert(bytes_to_predownload < file_segment.range().size());
                     }
 
+                    // Looks like this case we return as well but differnt read type.
+                    // worth checking how different read type is being used.
                     read_type = ReadType::REMOTE_FS_READ_AND_PUT_IN_CACHE;
                     return getRemoteReadBuffer(file_segment, read_type);
                 }
@@ -425,6 +434,7 @@ CachedOnDiskReadBufferFromFile::getImplementationBuffer(FileSegment & file_segme
     auto range = file_segment.range();
     bytes_to_predownload = 0;
 
+    // This is the actual time spend on the downloading if happens.
     Stopwatch watch(CLOCK_MONOTONIC);
 
     auto read_buffer_for_file_segment = getReadBufferForFileSegment(file_segment);
@@ -812,6 +822,8 @@ bool CachedOnDiskReadBufferFromFile::nextImpl()
     }
 }
 
+// In this sense the class should only be for the single file for s3. let's see how this 
+// is used in different read, different query.
 bool CachedOnDiskReadBufferFromFile::nextImplStep()
 {
     last_caller_id = FileSegment::getCallerId();

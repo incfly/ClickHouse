@@ -607,6 +607,7 @@ void FileSegment::setDownloadFailedUnlocked(const FileSegmentGuard::Lock & lock)
     remote_file_reader.reset();
 }
 
+// This is downloaded event.
 void FileSegment::completePartAndResetDownloader()
 {
     auto lk = lock();

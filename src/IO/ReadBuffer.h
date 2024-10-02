@@ -33,6 +33,7 @@ static constexpr auto DEFAULT_PREFETCH_PRIORITY = Priority{0};
   *
   * Derived classes must implement the nextImpl() method.
   */
+  /// Where the read buffer size is finally defined.
 class ReadBuffer : public BufferBase
 {
 public:
@@ -61,6 +62,10 @@ public:
       * if an exception was thrown, is the ReadBuffer left in a usable state? this varies across implementations;
       * can the caller retry next() after an exception, or call other methods? not recommended
       */
+    /// Core idea of why nextImpl in CachedOnDiskReadBufferFromFile is needed and how used.
+    // See some ReadWriteBufferFromHTTP.cpp usage, basically push the underlying impl to get data into the buffer.
+    // This way s3 cache focus on implementing the memory mgmt and read write operation would be just interface
+    // to the base class.
     bool next()
     {
         chassert(!hasPendingData());

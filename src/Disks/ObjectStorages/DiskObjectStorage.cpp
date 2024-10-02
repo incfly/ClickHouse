@@ -489,6 +489,7 @@ String DiskObjectStorage::getWriteResourceName() const
     return write_resource_name;
 }
 
+// Read file is creating ReadBufferFromFileBase instance.
 std::unique_ptr<ReadBufferFromFileBase> DiskObjectStorage::readFile(
     const String & path,
     const ReadSettings & settings,
