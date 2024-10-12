@@ -1300,7 +1300,7 @@ void TCPHandler::sendMergeTreeAllRangesAnnouncementAssumeLocked(InitialAllRanges
     out->next();
 }
 
-
+// Where individual request is sent from exuecuting replica to coordinator.
 void TCPHandler::sendMergeTreeReadTaskRequestAssumeLocked(ParallelReadRequest request)
 {
     writeVarUInt(Protocol::Server::MergeTreeReadTaskRequest, *out);

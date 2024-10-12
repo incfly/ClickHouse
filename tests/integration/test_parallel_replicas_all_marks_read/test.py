@@ -151,6 +151,7 @@ def test_number_of_marks_read(
         query, query_id, cluster_name, parallel_replicas_mark_segment_size
     ) == _get_result_without_parallel_replicas(query)
 
+    # This makes sure the query is reading from the same node. so only node0 is being used for parallel replica after optimization.
     assert _get_number_of_marks_read_by_replicas(
         query_id
     ) == _get_expected_amount_of_marks_to_read(query)

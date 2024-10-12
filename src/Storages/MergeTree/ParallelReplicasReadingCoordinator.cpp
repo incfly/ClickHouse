@@ -243,6 +243,13 @@ private:
 
     LoggerPtr log = getLogger("DefaultCoordinator");
 
+    /// This now is pretty clear. we have the owner, stearler, general queue concept and try to be consistent of
+    /// who is working on the segment. but seems still assuming relative stable of and the state of the parts to replica mapping. not sure how it would work in a more stateless case.
+    /// Remaining to read: how the consistent hash is calculated, and how replica number is calculated.
+    /// Solved, computeConsistentHash
+    /// So overall just using CH and stealer dynamic mgmt, rather than tracking the part in a control plane node and then make assignment. pretty lightweight, but not sure how it would work in other cases and whether a more centralized planning would help better.
+    /// Remaining: track how the ping-pong iterative process is handled here.
+
     /// Workflow of a segment:
     /// 0. `all_parts_to_read` contains all the parts and thus all the segments initially present there (virtually)
     /// 1. when we traverse `all_parts_to_read` in selectPartsAndRanges() we either:
@@ -285,6 +292,7 @@ private:
     /// observed along the way to what node they belong to.
     /// Ranges in this queue might belong to a part that the given replica cannot read from - the corresponding check happens later.
     /// TODO: consider making it bounded in size
+    // This is indexed on the replica index itself.
     std::vector<std::multiset<RangesInDataPartDescription, BiggerPartsFirst>> distribution_by_hash_queue;
 
     /// For some ranges their owner and stealer (by consistent hash) cannot read from the given part at all. So this range have to be stolen anyway.
@@ -652,6 +660,13 @@ void DefaultCoordinator::processPartsFurther(
             auto & range = part.description.ranges.front();
 
             /// Parts are divided into segments of `mark_segment_size` granules staring from 0-th granule
+            /// This is the logic to make the park size distribution more even. Considering the mark segment size.
+            /// Maybe equal to the number of the rows?
+            /// Yes
+            /// /** A pair of marks that defines the range of rows in a part. Specifically,
+            //  the range has the form [begin * index_granularity, end * index_granularity).
+            //  
+            // struct MarkRange
             for (size_t segment_begin = roundDownToMultiple(range.begin, mark_segment_size);
                  segment_begin < range.end && current_marks_amount < min_number_of_marks;
                  segment_begin += mark_segment_size)
@@ -742,6 +757,7 @@ void DefaultCoordinator::enqueueToStealerOrStealingQueue(const MergeTreePartInfo
     }
 }
 
+/// Here we go, the hash computation logic.
 size_t DefaultCoordinator::computeConsistentHash(const std::string & part_name, size_t segment_begin, ScanMode scan_mode) const
 {
     chassert(segment_begin % mark_segment_size == 0);
@@ -752,6 +768,7 @@ size_t DefaultCoordinator::computeConsistentHash(const std::string & part_name, 
     return ConsistentHashing(hash.get64(), replicas_count);
 }
 
+// Very essential part of how coordinator to distribute the parts to different replicas.
 ParallelReadResponse DefaultCoordinator::handleRequest(ParallelReadRequest request)
 {
     LOG_TRACE(log, "Handling request from replica {}, minimal marks size is {}", request.replica_num, request.min_number_of_marks);
@@ -861,6 +878,8 @@ void InOrderCoordinator<mode>::markReplicaAsUnavailable(size_t replica_number)
     }
 }
 
+// initial annoucement is the response sent back from other replicas to the coordinator.
+// need to post processing for internal part state tracking.
 template <CoordinationMode mode>
 void InOrderCoordinator<mode>::doHandleInitialAllRangesAnnouncement(InitialAllRangesAnnouncement announcement)
 {
@@ -1051,6 +1070,12 @@ void ParallelReplicasReadingCoordinator::handleInitialAllRangesAnnouncement(Init
     pimpl->handleInitialAllRangesAnnouncement(std::move(announcement));
 }
 
+
+// When a replica is asking coordinator: i need to read something.
+// Yes!
+/// struct ParallelReadRequest
+/// ParallelReadRequest is used by remote replicas during parallel read
+/// to signal an initiator that they need more marks to read.
 ParallelReadResponse ParallelReplicasReadingCoordinator::handleRequest(ParallelReadRequest request)
 {
     if (request.min_number_of_marks == 0)

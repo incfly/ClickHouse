@@ -575,10 +575,13 @@ RemoteQueryExecutor::ReadResult RemoteQueryExecutor::restartQueryWithoutDuplicat
         return readAsync();
 }
 
+// RemoteQueryExecutor seems to be the entry point for remote execution. for both distributed and parallel replica?
 RemoteQueryExecutor::ReadResult RemoteQueryExecutor::processPacket(Packet packet)
 {
     switch (packet.type)
     {
+        // MergeTreeReadTaskRequest = 16,  /// Request from a MergeTree replica to a coordinator
+        // So basically when a replica is telling the coordinator, I want to read some parts?
         case Protocol::Server::MergeTreeReadTaskRequest:
             chassert(packet.request.has_value());
             processMergeTreeReadTaskRequest(packet.request.value());
