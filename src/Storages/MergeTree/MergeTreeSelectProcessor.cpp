@@ -75,6 +75,7 @@ void ParallelReadingExtension::sendInitialRequest(CoordinationMode mode, const R
     all_callback(InitialAllRangesAnnouncement{mode, ranges.getDescriptions(), number_of_current_replica, mark_segment_size});
 }
 
+// sendReadrequest -> call to ask for paralle read request.
 std::optional<ParallelReadResponse> ParallelReadingExtension::sendReadRequest(
     CoordinationMode mode, size_t min_number_of_marks, const RangesInDataPartsDescription & description) const
 {
@@ -174,6 +175,8 @@ ChunkAndProgress MergeTreeSelectProcessor::read()
     {
         try
         {
+            // When this is being executed yes! constantly trying to
+            // get task from coordinator.
             if (!task || algorithm->needNewTask(*task))
                 task = algorithm->getNewTask(*pool, task.get());
 

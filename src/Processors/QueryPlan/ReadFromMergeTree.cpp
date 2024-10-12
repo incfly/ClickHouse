@@ -350,6 +350,7 @@ ReadFromMergeTree::ReadFromMergeTree(
         else
             all_ranges_callback = context->getMergeTreeAllRangesCallback();
 
+        // passed around to the ReadFromMergeTre ctr here.
         if (read_task_callback_.has_value())
             read_task_callback = read_task_callback_.value();
         else
@@ -594,6 +595,8 @@ Pipe ReadFromMergeTree::readInOrder(
     if (is_parallel_reading_from_replicas)
     {
         const auto & client_info = context->getClientInfo();
+
+        // passed to here. (note remote replica where this is executed)
         ParallelReadingExtension extension{
             all_ranges_callback.value(),
             read_task_callback.value(),

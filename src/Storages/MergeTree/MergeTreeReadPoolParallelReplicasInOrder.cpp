@@ -58,6 +58,7 @@ MergeTreeReadPoolParallelReplicasInOrder::MergeTreeReadPoolParallelReplicasInOrd
     extension.sendInitialRequest(mode, parts_ranges, /*mark_segment_size_=*/0);
 }
 
+// guess the logic is trying to get the local task first if not send paralle read task to the coordinator.
 MergeTreeReadTaskPtr MergeTreeReadPoolParallelReplicasInOrder::getTask(size_t task_idx, MergeTreeReadTask * previous_task)
 {
     std::lock_guard lock(mutex);
