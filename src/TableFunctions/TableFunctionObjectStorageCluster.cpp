@@ -14,6 +14,9 @@
 namespace DB
 {
 
+/// TableFunctionObjectStorageCluster<S3ClusterDefinition> creates the storage class for s3Clsuter.
+/// This function gets the cluster definition, but let's see how the initiator and other replica in the cluster
+/// communicates.
 template <typename Definition, typename Configuration>
 StoragePtr TableFunctionObjectStorageCluster<Definition, Configuration>::executeImpl(
     const ASTPtr & /*function*/, ContextPtr context,
@@ -66,6 +69,7 @@ StoragePtr TableFunctionObjectStorageCluster<Definition, Configuration>::execute
 void registerTableFunctionObjectStorageCluster(TableFunctionFactory & factory)
 {
 #if USE_AWS_S3
+    /// Function name register, probably why not seeing in other place of the entire class/header file of this.
     factory.registerFunction<TableFunctionS3Cluster>(
     {
         .documentation = {

@@ -959,7 +959,7 @@ void Connection::sendIgnoredPartUUIDs(const std::vector<UUID> & uuids)
     out->next();
 }
 
-
+/// Where the initiator tells other replica, you, please read this Response.
 void Connection::sendReadTaskResponse(const String & response)
 {
     writeVarUInt(Protocol::Client::ReadTaskResponse, *out);

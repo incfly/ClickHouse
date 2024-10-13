@@ -24,6 +24,9 @@ class StorageObjectStorage : public IStorage
 {
 public:
     class Configuration;
+    /// Here we have some clue probably the configuration ptr is how the things are wired up together.
+    /// Different s3 azure hdfs etc are different configuration class and this storage class impl generics of the 
+    /// file system operation.
     using ConfigurationPtr = std::shared_ptr<Configuration>;
     using ObjectInfo = RelativePathWithMetadata;
     using ObjectInfoPtr = std::shared_ptr<ObjectInfo>;

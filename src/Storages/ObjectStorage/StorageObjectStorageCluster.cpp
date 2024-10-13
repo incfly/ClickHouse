@@ -111,6 +111,9 @@ void StorageObjectStorageCluster::updateQueryToSendIfNeeded(
     args.insert(args.begin(), cluster_name_arg);
 }
 
+/// Seems here is where we make cluster different node collaborate together via providing a iterator pattern.
+/// But how is the storage src/TableFunctions/TableFunctionObjectStorageCluster.cpp wired up?
+/// TODO: figure this out.
 RemoteQueryExecutor::Extension StorageObjectStorageCluster::getTaskIteratorExtension(
     const ActionsDAG::Node * predicate, const ContextPtr & local_context) const
 {
@@ -118,6 +121,7 @@ RemoteQueryExecutor::Extension StorageObjectStorageCluster::getTaskIteratorExten
         configuration, configuration->getQuerySettings(local_context), object_storage, /* distributed_processing */false,
         local_context, predicate, virtual_columns, nullptr, local_context->getFileProgressCallback());
 
+    /// From the code the getPath could be iterator generate the s3 path that a replica needs to read.
     auto callback = std::make_shared<std::function<String()>>([iterator]() mutable -> String
     {
         auto object_info = iterator->next(0);
@@ -126,6 +130,10 @@ RemoteQueryExecutor::Extension StorageObjectStorageCluster::getTaskIteratorExten
         else
             return "";
     });
+    /// Check void RemoteQueryExecutor::processReadTaskRequest()
+    /// Remaining queestion is how the content is being read. whether it's blob raw data or processed content.
+    /// https://github.com/ClickHouse/ClickHouse/pull/29279 is the original starting point.
+    /// Mabye somewhere from `ReadFromRemote`.
     return RemoteQueryExecutor::Extension{ .task_iterator = std::move(callback) };
 }
 

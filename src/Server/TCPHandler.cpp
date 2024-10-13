@@ -535,7 +535,14 @@ void TCPHandler::runImpl()
 
             customizeContext(query_context);
 
-            /// This callback is needed for requesting read tasks inside pipeline for distributed processing
+            /// This callback is for the initiator to get the response see receiveReadTaskResponseAssumeLocked()
+            /// below. the body is to get the content from remote side.
+            /// This is from the public doc about s3 cluster
+            // Allows processing files from Amazon S3 and Google Cloud Storage Google Cloud Storage in parallel from many nodes in a specified cluster. On initiator it creates a connection to all nodes in the cluster, discloses asterisks in S3 file path, and dispatches each file dynamically. On the worker node it asks the initiator about the next task to process and processes it. This is repeated until all tasks are finished.
+
+            /// So similar to the parallel replicas but not sure whether it's processe the raw content or the processed queries on those files.
+
+            /// Just the callback. now see how the callback is actually invoked.
             query_context->setReadTaskCallback([this]() -> String
             {
                 Stopwatch watch;
@@ -1283,6 +1290,7 @@ void TCPHandler::sendPartUUIDs()
 }
 
 
+/// Where other replica writes
 void TCPHandler::sendReadTaskRequestAssumeLocked()
 {
     writeVarUInt(Protocol::Server::ReadTaskRequest, *out);
@@ -1842,6 +1850,7 @@ String TCPHandler::receiveReadTaskResponseAssumeLocked()
     if (version != DBMS_CLUSTER_PROCESSING_PROTOCOL_VERSION)
         throw Exception(ErrorCodes::UNKNOWN_PROTOCOL, "Protocol version for distributed processing mismatched");
     String response;
+    /// Probably just reading the s3 content.
     readStringBinary(response, *in);
     return response;
 }

@@ -592,6 +592,7 @@ RemoteQueryExecutor::ReadResult RemoteQueryExecutor::processPacket(Packet packet
             processMergeTreeInitialReadAnnouncement(packet.announcement.value());
             return ReadResult(ReadResult::Type::ParallelReplicasToken);
 
+        /// s3Cluter remote read task with other replicas.
         case Protocol::Server::ReadTaskRequest:
             processReadTaskRequest();
             break;
@@ -691,12 +692,15 @@ bool RemoteQueryExecutor::setPartUUIDs(const std::vector<UUID> & uuids)
     return true;
 }
 
+/// Being remote.
 void RemoteQueryExecutor::processReadTaskRequest()
 {
     if (!extension || !extension->task_iterator)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Distributed task iterator is not initialized");
 
     ProfileEvents::increment(ProfileEvents::ReadTaskRequestsReceived);
+
+    /// task iterator is created in the storage class.
     auto response = (*extension->task_iterator)();
     connections->sendReadTaskResponse(response);
 }

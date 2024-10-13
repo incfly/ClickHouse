@@ -40,6 +40,8 @@ public:
 
     /// We can provide additional logic for RemoteQueryExecutor
     /// For example for s3Cluster table function we provide an Iterator over tasks to do.
+    /// Here is  the documentation of how s3 cluster and parallel replica is different.
+
     /// Nodes involved into the query send request for a new task and we answer them using this object.
     /// In case of parallel reading from replicas we provide a Coordinator object
     /// Every replica will tell us about parts and mark ranges it wants to read and coordinator will

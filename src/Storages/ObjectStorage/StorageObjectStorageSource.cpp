@@ -114,6 +114,7 @@ std::shared_ptr<StorageObjectStorageSource::IIterator> StorageObjectStorageSourc
     ObjectInfos * read_keys,
     std::function<void(FileProgress)> file_progress_callback)
 {
+    /// Here is the initiator.
     if (distributed_processing)
         return std::make_shared<ReadTaskIterator>(local_context->getReadTaskCallback(), local_context->getSettingsRef()[Setting::max_threads]);
 
