@@ -1522,6 +1522,7 @@ void Planner::buildPlanForQueryNode()
         /// Check support for JOIN for parallel replicas with custom key
         if (planner_context->getTableExpressionNodeToData().size() > 1)
         {
+            /// Evidence of JOIN is not supported by parallel replicas. Mentioned in Raul's presentation.
             if (settings[Setting::allow_experimental_parallel_reading_from_replicas] >= 2)
                 throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "JOINs are not supported with parallel replicas");
             else

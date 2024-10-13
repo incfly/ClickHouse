@@ -1020,6 +1020,7 @@ JoinTreeQueryPlan buildQueryPlanForTableExpression(QueryTreeNodePtr table_expres
                         }
 
                         // (3) if parallel replicas still enabled - replace reading step
+                        // Analyzing whether able to use parallel replica first.
                         if (planner_context->getQueryContext()->canUseParallelReplicasOnInitiator())
                         {
                             from_stage = QueryProcessingStage::WithMergeableState;

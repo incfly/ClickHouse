@@ -590,12 +590,15 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     }
 
     /// Check support for FINAL for parallel replicas
+    /// Here is the main analysis based on the query, to decide whether we can use parallel replicas or not.
     bool is_query_with_final = isQueryWithFinal(query_info);
     if (is_query_with_final && context->canUseTaskBasedParallelReplicas())
     {
         if (settings[Setting::allow_experimental_parallel_reading_from_replicas] == 1)
         {
             LOG_DEBUG(log, "FINAL modifier is not supported with parallel replicas. Query will be executed without using them.");
+            /// context object contains: throttler, database, tables, settings and other facility objects for query to be executed.
+            /// Similar to the pattern in envoy.
             context->setSetting("allow_experimental_parallel_reading_from_replicas", Field(0));
         }
         else if (settings[Setting::allow_experimental_parallel_reading_from_replicas] >= 2)
@@ -605,6 +608,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     }
 
     /// Check support for parallel replicas for non-replicated storage (plain MergeTree)
+    /// search "setSetting.*allow_experimental_parallel_reading_from_replicas" in entire code base would see many places we disable parallel replica.
     bool is_plain_merge_tree = storage && storage->isMergeTree() && !storage->supportsReplication();
     if (is_plain_merge_tree && settings[Setting::allow_experimental_parallel_reading_from_replicas] > 0
         && !settings[Setting::parallel_replicas_for_non_replicated_merge_tree])
