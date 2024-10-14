@@ -5,6 +5,7 @@ namespace DB
 {
 
 
+/// retry passed around.
 WithRetries::WithRetries(Poco::Logger * log_, zkutil::GetZooKeeper get_zookeeper_, const KeeperSettings & settings_, RenewerCallback callback_)
     : log(log_)
     , get_zookeeper(get_zookeeper_)

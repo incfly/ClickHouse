@@ -57,6 +57,7 @@ namespace
 
             auto get_zookeeper = [global_context = context->getGlobalContext()] { return global_context->getZooKeeper(); };
 
+            /// How settings are passed around.
             BackupCoordinationRemote::BackupKeeperSettings keeper_settings
             {
                 .keeper_max_retries = context->getSettingsRef().backup_restore_keeper_max_retries,
@@ -71,6 +72,12 @@ namespace
             auto all_hosts = BackupSettings::Util::filterHostIDs(
                 backup_settings.cluster_host_ids, backup_settings.shard_num, backup_settings.replica_num);
 
+            /// worker is creating BackupCoordinationRemote.
+            /// Decision on whether using `BackupCoordinationRemote` or `BackupCoordinationLocal` is made here.
+            /// Let's check how the `remote` flag is set.
+            /// See doBackup() below
+            /// if (!backup_coordination)
+            //     backup_coordination = makeBackupCoordination(context, backup_settings, /* remote= */ on_cluster);
             return std::make_shared<BackupCoordinationRemote>(
                 get_zookeeper,
                 root_zk_path,
@@ -392,6 +399,7 @@ void BackupsWorker::doBackup(
         BackupMutablePtr backup = BackupFactory::instance().createBackup(backup_create_params);
 
         /// Write the backup.
+        /// Difference of on_cluster but this happens before the `buildFileInfosForBackupEntries` not sure how it would make it different.
         if (on_cluster)
         {
             DDLQueryOnClusterParams params;
@@ -404,9 +412,14 @@ void BackupsWorker::doBackup(
             // executeDDLQueryOnCluster() will return without waiting for completion
             mutable_context->setSetting("distributed_ddl_task_timeout", Field{0});
             mutable_context->setSetting("distributed_ddl_output_mode", Field{"none"});
+
+            /// Now it's interesting to see how the DDL of backup query can be executed on the same node.
             executeDDLQueryOnCluster(backup_query, mutable_context, params);
 
             /// Wait until all the hosts have written their backup entries.
+            /// This is where it fails. found in SolarWinds.
+            /// stacktrace 6.
+            /// Interesting to see the backup coordination is wait for all host to complete.
             backup_coordination->waitForStage(Stage::COMPLETED);
             backup_coordination->setStage(Stage::COMPLETED,"");
         }
@@ -422,6 +435,8 @@ void BackupsWorker::doBackup(
             }
 
             /// Write the backup entries to the backup.
+
+            /// Stacktrace 6 in the code.
             buildFileInfosForBackupEntries(backup, backup_entries, backup_create_params.read_settings, backup_coordination);
             writeBackupEntries(backup, std::move(backup_entries), backup_id, backup_coordination, backup_settings.internal);
 
@@ -477,6 +492,8 @@ void BackupsWorker::buildFileInfosForBackupEntries(const BackupPtr & backup, con
     LOG_TRACE(log, "{}", Stage::BUILDING_FILE_INFOS);
     backup_coordination->setStage(Stage::BUILDING_FILE_INFOS, "");
     backup_coordination->waitForStage(Stage::BUILDING_FILE_INFOS);
+    /// buildFileInfosForBackupEntries is used for computing all the file list.
+    /// Stacktrace 6 (not show in the exception) but probably it is.
     backup_coordination->addFileInfos(::DB::buildFileInfosForBackupEntries(backup_entries, backup->getBaseBackup(), read_settings, *backups_thread_pool));
 }
 

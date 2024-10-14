@@ -887,6 +887,8 @@ void BackupImpl::writeFile(const BackupFileInfo & info, BackupEntryPtr entry)
     else if (src_disk && from_immutable_file)
     {
         LOG_TRACE(log, "Writing backup for file {} from {} (disk {}): data file #{}", info.data_file_name, src_file_desc, src_disk->getName(), info.data_file_index);
+        /// This is the case of S3 server side copy. See slack thread
+        /// https://clickhouse-inc.slack.com/archives/C03JLG3K7QA/p1725041912043869
         writer->copyFileFromDisk(info.data_file_name, src_disk, src_file_path, info.encrypted_by_disk, info.base_size, info.size - info.base_size);
     }
     else

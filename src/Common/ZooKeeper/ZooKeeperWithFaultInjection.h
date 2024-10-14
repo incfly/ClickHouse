@@ -272,6 +272,8 @@ public:
     {
         path_created.clear();
 
+        // stacktrace 3
+        // lost here... 
         auto error = access(
             "tryCreate",
             path,
@@ -322,11 +324,13 @@ public:
     void createIfNotExists(const std::string & path, const std::string & data)
     {
         std::string path_created;
+        // Stacktrace 4
         auto code = tryCreate(path, data, zkutil::CreateMode::Persistent, path_created);
 
         if (code == Coordination::Error::ZOK || code == Coordination::Error::ZNODEEXISTS)
             return;
 
+        // throw here the code is not ok.
         throw zkutil::KeeperException::fromPath(code, path);
     }
 

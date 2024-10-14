@@ -133,6 +133,7 @@ BackupEntries BackupEntriesCollector::run()
 
     /// No more backup entries or tasks are allowed after this point.
 
+    /// wow interesting. backup_entries owned by collector but here we use std::move.
     return std::move(backup_entries);
 }
 

@@ -490,6 +490,7 @@ public:
         return Exception(msg, code_, 0);
     }
 
+    // Stacktrace 2. but lost how it's invoked.
     inline static Exception fromPath(const Error code_, const std::string & path)
     {
         return Exception(code_, "Coordination error: {}, path {}", errorMessage(code_), path);

@@ -6,6 +6,8 @@
 namespace DB
 {
 
+
+/// Multiple Backup stage, useful for understanding sequence.
 namespace BackupCoordinationStage
 {
     /// This stage is set after concurrency check so ensure we dont start other backup/restores

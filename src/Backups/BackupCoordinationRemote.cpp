@@ -152,6 +152,7 @@ size_t BackupCoordinationRemote::findCurrentHostIndex(const Strings & all_hosts,
     return it - all_hosts.begin();
 }
 
+/// TODO: see the purpose of BackupCoordinationRemote overall, and where it is being created.
 BackupCoordinationRemote::BackupCoordinationRemote(
     zkutil::GetZooKeeper get_zookeeper_,
     const String & root_zookeeper_path_,
@@ -163,7 +164,7 @@ BackupCoordinationRemote::BackupCoordinationRemote(
     bool is_internal_)
     : root_zookeeper_path(root_zookeeper_path_)
     , zookeeper_path(root_zookeeper_path_ + "/backup-" + backup_uuid_)
-    , keeper_settings(keeper_settings_)
+    , keeper_settings(keeper_settings_) // where the retry settings are passed to the with_retries below.
     , backup_uuid(backup_uuid_)
     , all_hosts(all_hosts_)
     , current_host(current_host_)
@@ -285,7 +286,9 @@ void BackupCoordinationRemote::serializeToMultipleZooKeeperNodes(const String & 
         holder.retries_ctl.retryLoop(
         [&, &zk = holder.faulty_zookeeper]()
         {
+            // zk probably should also disable faulty keeper.
             with_retries.renewZooKeeper(zk);
+            // Suspect it's this.
             zk->createIfNotExists(path, "");
         });
     }
@@ -297,6 +300,7 @@ void BackupCoordinationRemote::serializeToMultipleZooKeeperNodes(const String & 
     if (!max_part_size)
         max_part_size = value.size();
 
+    /// No this is creating multiple zk nodes not just one.
     size_t num_parts = (value.size() + max_part_size - 1) / max_part_size; /// round up
 
     for (size_t i = 0; i != num_parts; ++i)
@@ -666,6 +670,10 @@ void BackupCoordinationRemote::prepareReplicatedSQLObjects() const
         replicated_sql_objects->addDirectory(std::move(directory));
 }
 
+// Stacktrace 5
+/// Ah probably this is the reason of why addFileInfos is invoking zk or not.
+/// ON CLUSTER ones use `BackupCoordinationRemote`, Local ones use `BackupCoordinationLocal`.
+/// Let'ssee when we have branch of `BackupCoordinationRemote` to be used.
 void BackupCoordinationRemote::addFileInfos(BackupFileInfos && file_infos_)
 {
     {
@@ -675,6 +683,10 @@ void BackupCoordinationRemote::addFileInfos(BackupFileInfos && file_infos_)
     }
 
     /// Serialize `file_infos_` and write it to ZooKeeper's nodes.
+    /// this serialize all the file info into a string and write to the zookeeper
+    /// not sure if there's a size limit if the table is too large.
+
+    /// TODO: check file_infos_ size, what do they correspond to?
     String file_infos_str = FileInfos::serialize(file_infos_);
     serializeToMultipleZooKeeperNodes(zookeeper_path + "/file_infos/" + current_host, file_infos_str, "addFileInfos");
 }
@@ -693,6 +705,7 @@ BackupFileInfos BackupCoordinationRemote::getFileInfosForAllHosts() const
     return file_infos->getFileInfosForAllHosts();
 }
 
+/// Here is the backup getting file info in other host?
 void BackupCoordinationRemote::prepareFileInfos() const
 {
     if (file_infos)

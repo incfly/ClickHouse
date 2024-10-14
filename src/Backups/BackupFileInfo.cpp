@@ -93,6 +93,7 @@ String BackupFileInfo::describe() const
 }
 
 
+/// Every single file is logged for the file info.
 BackupFileInfo buildFileInfoForBackupEntry(
     const String & file_name,
     const BackupEntryPtr & backup_entry,
@@ -242,6 +243,7 @@ BackupFileInfos buildFileInfosForBackupEntries(const BackupEntries & backup_entr
                         return;
                 }
 
+                /// This is a single file info.
                 infos[i] = buildFileInfoForBackupEntry(name, entry, base_backup, read_settings, log);
             }
             catch (...)

@@ -953,6 +953,8 @@ void StorageLog::backupData(BackupEntriesCollector & backup_entries_collector, c
     bool copy_encrypted = !backup_entries_collector.getBackupSettings().decrypt_files_from_encrypted_disks;
 
     /// *.bin
+    /// Example that a backup would write all column mark data files (.bin) into backup files info.
+    /// Won't that be huge? TODO: check if this is under the whole backup zk path.
     for (const auto & data_file : data_files)
     {
         /// We make a copy of the data file because it can be changed later in write() or in truncate().

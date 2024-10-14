@@ -47,12 +47,13 @@ public:
     virtual bool fileExists(const String & file_name) = 0;
     virtual UInt64 getFileSize(const String & file_name) = 0;
     virtual bool fileContentsEqual(const String & file_name, const String & expected_file_contents) = 0;
-
+    
     virtual std::unique_ptr<WriteBuffer> writeFile(const String & file_name) = 0;
 
     using CreateReadBufferFunction = std::function<std::unique_ptr<SeekableReadBuffer>()>;
     virtual void copyDataToFile(const String & path_in_backup, const CreateReadBufferFunction & create_read_buffer, UInt64 start_pos, UInt64 length) = 0;
 
+    /// CopyObject -> Server side copy.
     /// The function copyFileFromDisk() can be much faster than copyDataToFile()
     /// (especially for S3 where it can use CopyObject to copy objects inside S3 instead of downloading and uploading them).
     /// Parameters:

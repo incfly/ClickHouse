@@ -11,6 +11,7 @@ namespace DB
 /// and this tiny class encapsulates all the machinery for make it possible -
 /// a [Zoo]Keeper client which injects faults with configurable probability
 /// and a retries controller which performs retries with growing backoff.
+/// These are the retries specifically for the backup when talking to keeper.
 class WithRetries
 {
 public:
